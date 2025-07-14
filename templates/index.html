@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Server</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Upload a File</h1>
+        <form id="uploadForm" method="post" enctype="multipart/form-data" onsubmit="return false;" style="display: flex; align-items: center; gap: 16px; margin-bottom: 18px;">
+            <input type="file" id="fileInput" multiple webkitdirectory>
+            <button type="button" id="uploadFolderBtn" style="background: #28a745; color: #fff; display: none;">Upload Folder</button>
+        </form>
+        <div class="server-ip" style="margin-bottom: 18px;">
+          Server URL: <strong><a href="{{ server_url }}" target="_blank">{{ server_url }}</a></strong>
+        </div>
+        <div id="currentUpload" style="display:none; font-weight:600; margin: 12px 0 8px 0; color:#007bff;"></div>
+        <div id="filesLeft" style="display:none; font-weight:500; margin-bottom: 8px; color:#555;"></div>
+        <div id="uploadTimer" style="display:none; font-weight:500; margin-bottom: 8px; color:#888;"></div>
+        <div id="previewQueue" style="display:none; flex-direction:column; gap:12px; margin: 18px 0 10px 0;"></div>
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div style="display: flex; align-items: flex-start; justify-content: flex-end;">
+              <button id="closeFlashMessages" title="Hide messages" style="background: none; border: none; font-size: 1.3em; color: #a00; cursor: pointer; margin-bottom: 0; margin-right: 0;">&times;</button>
+            </div>
+            <div id="flashMessages">
+              <ul class="flashes">
+              {% for message in messages %}
+                <li>{{ message }}</li>
+              {% endfor %}
+              </ul>
+            </div>
+            <script>
+              document.getElementById('closeFlashMessages').onclick = function() {
+                document.getElementById('flashMessages').style.display = 'none';
+                this.style.display = 'none';
+              };
+            </script>
+          {% endif %}
+        {% endwith %}
+        <script>
+        const fileInput = document.getElementById('fileInput');
+        const previewQueue = document.getElementById('previewQueue');
+        const uploadFolderBtn = document.getElementById('uploadFolderBtn');
+        const currentUpload = document.getElementById('currentUpload');
+        let previewBars = [];
+        const filesLeft = document.getElementById('filesLeft');
+        const uploadTimer = document.getElementById('uploadTimer');
+        
+        function estimateUploadTime(fileSize) {
+            const MB = 1024 * 1024;
+            const typicalSpeedMbps = 50; // Assume 50 Mbps typical connection
+            const speedBytesPerSec = (typicalSpeedMbps * 1000000) / 8;
+            const timeSeconds = fileSize / speedBytesPerSec;
+            
+            if (timeSeconds < 60) {
+                return `~${Math.round(timeSeconds)} seconds`;
+            } else if (timeSeconds < 3600) {
+                return `~${Math.round(timeSeconds / 60)} minutes`;
+            } else {
+                return `~${Math.round(timeSeconds / 3600)} hours`;
+            }
+        }
+        
+        fileInput.addEventListener('change', function() {
+            previewQueue.innerHTML = '';
+            previewBars = [];
+            filesLeft.style.display = 'none';
+            uploadTimer.style.display = 'none';
+            
+            if (fileInput.files.length > 0) {
+                // Check for large files (over 1GB)
+                const GB = 1024 * 1024 * 1024;
+                const largeFiles = Array.from(fileInput.files).filter(file => file.size > GB);
+                
+                if (largeFiles.length > 0) {
+                    const maxSize = Math.max(...largeFiles.map(f => f.size));
+                    const maxSizeGB = (maxSize / GB).toFixed(2);
+                    
+                    const warningMessage = `⚠️ WARNING: Large File Detected!
+                    
+📁 Largest file: ${maxSizeGB} GB
+⏰ Upload time: ${estimateUploadTime(maxSize)}
+💾 Memory usage: ~${maxSizeGB} GB RAM needed
+🌐 Network impact: May slow down other devices
+
+❌ Potential issues:
+• Browser may timeout on slow connections
+• Upload failure if network disconnects
+• High memory usage during upload
+• Longer recovery time if upload fails
+
+✅ Click OK to temporarily increase limit and proceed
+❌ Click Cancel to choose smaller files`;
+
+                    if (!confirm(warningMessage)) {
+                        fileInput.value = '';
+                        return;
+                    }
+                    
+                    // Store the temporary limit increase for the backend
+                    sessionStorage.setItem('tempMaxSize', maxSize + (100 * 1024 * 1024)); // Add 100MB buffer
+                }
+                
+                previewQueue.style.display = 'flex';
+                uploadFolderBtn.style.display = 'inline-block';
+                filesLeft.style.display = 'block';
+                filesLeft.textContent = fileInput.files.length + ' / ' + fileInput.files.length + ' file(s) left';
+                uploadTimer.style.display = 'none';
+                uploadTimer.textContent = '';
+                
+                Array.from(fileInput.files).forEach((file, idx) => {
+                    const fileDiv = document.createElement('div');
+                    fileDiv.style.display = 'flex';
+                    fileDiv.style.alignItems = 'center';
+                    fileDiv.style.gap = '16px';
+                    fileDiv.style.position = 'relative';
+                    fileDiv.style.height = '54px';
+                    fileDiv.style.background = '#f8fafb';
+                    fileDiv.style.borderRadius = '8px';
+                    fileDiv.style.marginBottom = '8px';
+                    fileDiv.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)';
+                    fileDiv.style.padding = '8px 14px';
+
+                    const thumbWrap = document.createElement('div');
+                    thumbWrap.style.flex = 'none';
+                    thumbWrap.style.display = 'flex';
+                    thumbWrap.style.alignItems = 'center';
+                    thumbWrap.style.justifyContent = 'center';
+                    thumbWrap.style.width = '44px';
+                    thumbWrap.style.height = '38px';
+
+                    if (file.type.startsWith('image/')) {
+                        const img = document.createElement('img');
+                        img.style.width = '38px';
+                        img.style.height = '38px';
+                        img.style.objectFit = 'cover';
+                        img.style.borderRadius = '6px';
+                        img.style.boxShadow = '0 1px 4px rgba(0,0,0,0.10)';
+                        const objectURL = URL.createObjectURL(file);
+                        img.src = objectURL;
+                        img.onload = () => URL.revokeObjectURL(objectURL); // Clean up memory
+                        thumbWrap.appendChild(img);
+                    } else if (file.type.startsWith('video/')) {
+                        const video = document.createElement('video');
+                        video.style.width = '38px';
+                        video.style.height = '38px';
+                        video.style.objectFit = 'cover';
+                        video.style.borderRadius = '6px';
+                        video.style.boxShadow = '0 1px 4px rgba(0,0,0,0.10)';
+                        const objectURL = URL.createObjectURL(file);
+                        video.src = objectURL;
+                        video.muted = true;
+                        video.playsInline = true;
+                        video.preload = 'metadata';
+                        video.controls = false;
+                        video.autoplay = false;
+                        video.addEventListener('mouseenter', () => video.play());
+                        video.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+                        video.addEventListener('loadeddata', () => URL.revokeObjectURL(objectURL)); // Clean up memory
+                        thumbWrap.appendChild(video);
+                    } else {
+                        const icon = document.createElement('span');
+                        icon.textContent = '📄';
+                        icon.style.fontSize = '1.7em';
+                        thumbWrap.appendChild(icon);
+                    }
+                    fileDiv.appendChild(thumbWrap);
+
+                    const infoWrap = document.createElement('div');
+                    infoWrap.style.display = 'flex';
+                    infoWrap.style.flexDirection = 'column';
+                    infoWrap.style.flex = '1';
+                    infoWrap.style.overflow = 'hidden';
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = file.webkitRelativePath || file.name;
+                    nameSpan.style.fontSize = '1.08em';
+                    nameSpan.style.color = '#333';
+                    nameSpan.style.whiteSpace = 'nowrap';
+                    nameSpan.style.overflow = 'hidden';
+                    nameSpan.style.textOverflow = 'ellipsis';
+                    nameSpan.style.display = 'block';
+                    infoWrap.appendChild(nameSpan);
+
+                    // Progress bar
+                    const barWrap = document.createElement('div');
+                    barWrap.style.width = '100%';
+                    barWrap.style.height = '8px';
+                    barWrap.style.background = '#e9ecef';
+                    barWrap.style.borderRadius = '4px';
+                    barWrap.style.overflow = 'hidden';
+                    barWrap.style.marginTop = '7px';
+                    const bar = document.createElement('div');
+                    bar.style.height = '100%';
+                    bar.style.width = '0%';
+                    bar.style.background = '#28a745';
+                    bar.style.transition = 'width 0.2s';
+                    barWrap.appendChild(bar);
+                    infoWrap.appendChild(barWrap);
+
+                    fileDiv.appendChild(infoWrap);
+                    previewQueue.appendChild(fileDiv);
+                    previewBars.push(bar);
+                });
+            } else {
+                previewQueue.style.display = 'none';
+                uploadFolderBtn.style.display = 'none';
+            }
+        });
+        uploadFolderBtn.addEventListener('click', async function() {
+            if (fileInput.files.length === 0) return;
+            const files = Array.from(fileInput.files);
+            let filesRemaining = files.length;
+            filesLeft.style.display = 'block';
+            currentUpload.style.display = 'block';
+            let startTime = Date.now();
+            let filesDone = 0;
+            uploadTimer.style.display = 'inline-block';
+            function updateUploadTimer() {
+                if (filesDone === 0) {
+                    uploadTimer.textContent = '';
+                    return;
+                }
+                const elapsed = (Date.now() - startTime) / 1000;
+                const avgPerFile = elapsed / filesDone;
+                const filesLeftCount = files.length - filesDone;
+                const timeLeft = Math.round(avgPerFile * filesLeftCount);
+                const mins = Math.floor(timeLeft / 60);
+                const secs = timeLeft % 60;
+                uploadTimer.textContent = `Time left: ${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+            updateUploadTimer();
+            let uploadTimerInterval = setInterval(updateUploadTimer, 1000);
+
+            const MAX_PARALLEL = 3;
+            let nextIndex = 0;
+            let activeUploads = 0;
+
+            await new Promise((resolveAll) => {
+                function startNext() {
+                    if (nextIndex >= files.length) {
+                        if (activeUploads === 0) {
+                            // All done
+                            clearInterval(uploadTimerInterval);
+                            currentUpload.textContent = 'All files uploaded!';
+                            filesLeft.textContent = '0 / ' + files.length + ' file(s) left';
+                            uploadTimer.textContent = 'Done!';
+                            
+                            // Clear temporary size limit
+                            sessionStorage.removeItem('tempMaxSize');
+                            
+                            setTimeout(() => { window.location.reload(); }, 800);
+                            resolveAll();
+                        }
+                        return;
+                    }
+                    const fileIdx = nextIndex;
+                    const file = files[fileIdx];
+                    nextIndex++;
+                    activeUploads++;
+                    currentUpload.textContent = 'Uploading: ' + (file.webkitRelativePath || file.name);
+                    filesLeft.textContent = filesRemaining + ' / ' + files.length + ' file(s) left';
+                    filesRemaining--;
+                    const formData = new FormData();
+                    formData.append('files', file, file.webkitRelativePath || file.name);
+                    
+                    // Add temporary size limit if set
+                    const tempMaxSize = sessionStorage.getItem('tempMaxSize');
+                    if (tempMaxSize) {
+                        formData.append('tempMaxSize', tempMaxSize);
+                    }
+                    
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/upload_folder');
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable) {
+                            const percent = (e.loaded / e.total) * 100;
+                            previewBars[fileIdx].style.width = percent + '%';
+                        }
+                    };
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            previewBars[fileIdx].style.width = '100%';
+                            previewBars[fileIdx].style.background = '#28a745';
+                        } else {
+                            previewBars[fileIdx].style.background = '#dc3545';
+                            console.error('Upload failed for file:', file.name, 'Status:', xhr.status);
+                        }
+                        filesDone++;
+                        updateUploadTimer();
+                        activeUploads--;
+                        startNext();
+                    };
+                    xhr.onerror = function() {
+                        previewBars[fileIdx].style.background = '#dc3545';
+                        console.error('Upload error for file:', file.name);
+                        filesDone++;
+                        updateUploadTimer();
+                        activeUploads--;
+                        startNext();
+                    };
+                    xhr.send(formData);
+                }
+                // Start up to MAX_PARALLEL uploads
+                for (let i = 0; i < Math.min(MAX_PARALLEL, files.length); i++) {
+                    startNext();
+                }
+            });
+        });
+        </script>
+    </div>
+    <div class="container available-files" style="margin-top: 32px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <h2 style="margin: 0;">Available Files</h2>
+        </div>
+        <div id="filesTableWrapper">
+        <table class="file-table">
+            <thead>
+                <tr>
+                    <th>Preview</th>
+                    <th>File Name</th>
+                    <th>Download</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for file in files %}
+                <tr>
+                    <td>
+                        <div class="preview">
+                        {% if previews[file].type == 'text' %}
+                            <pre>{{ previews[file].content }}</pre>
+                        {% elif previews[file].type == 'image' %}
+                            <img src="{{ previews[file].src }}" alt="Image preview" class="img-preview"/>
+                        {% elif previews[file].type == 'video' %}
+                            <video src="{{ previews[file].src }}" class="img-preview" style="max-width:120px;max-height:80px;" controls preload="metadata"></video>
+                        {% else %}
+                            <span class="no-preview">No preview available</span>
+                        {% endif %}
+                        </div>
+                    </td>
+                    <td style="vertical-align: middle;">{{ file }}</td>
+                    <td style="vertical-align: middle;">
+                        <a href="{{ url_for('download_file', filename=file) }}" class="download-link">Download</a>
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="3">No files uploaded yet.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</body>
+</html> 
