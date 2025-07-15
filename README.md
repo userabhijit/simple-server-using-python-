@@ -11,6 +11,21 @@ A simple Flask web application that allows you to upload files and folders throu
 pip install -r requirements.txt
 python app.py
 ```
+
+## ⚠️ Security First (Optional for Local Network):
+```bash
+# For local network use, the app will work without setting a SECRET_KEY
+# (Flask will generate one automatically)
+python app.py
+
+# BUT, if you want consistent sessions across server restarts:
+# Windows PowerShell:
+$env:SECRET_KEY="any-random-string-you-want"
+
+# Linux/Mac:
+export SECRET_KEY="any-random-string-you-want"
+```
+
 ## Then open the URL shown in your browser (usually `http://your-ip:5000`) and start uploading files!
 
 ## What it does: 
@@ -39,6 +54,24 @@ This is a **file upload server** that:
 - **Werkzeug** - Provides security utilities (like safe file names)
 - **HTML/CSS/JavaScript** - Creates the web interface
 - **File Storage** - Files are saved to the `uploads/` folder
+
+---
+
+## Project Structure
+
+```
+simple-server/
+├── app.py              # Main Flask application
+├── requirements.txt    # Python dependencies  
+├── README.md          # This file
+├── .gitignore         # Git ignore rules (excludes uploads/, .env, etc.)
+├── .env.example       # Template for environment variables
+├── static/
+│   └── styles.css     # CSS styling for the web interface
+├── templates/
+│   └── index.html     # Main HTML template
+└── uploads/           # Directory for uploaded files (auto-created, git-ignored)
+```
 
 ---
 
@@ -96,16 +129,14 @@ simple server(using python)/
 - **Progress Tracking**: See upload progress for each file
 - **Smart Size Limits**: Automatically detects large files (>1GB) and warns user about potential issues
 - **Temporary Limit Increase**: Allows temporary size limit increases for large files with user consent
-- **API Upload**: Supports programmatic uploads via `/uppy_upload` endpoint
 
 ### File Management
-- **Preview**: See thumbnails for images and videos, text previews for text files
-- **Download**: Download any uploaded file with secure filename handling
-- **File List**: View all uploaded files sorted by modification time (newest first)
-- **File Information**: Displays file types and basic metadata
+- **Preview**: See thumbnails for images and videos
+- **Download**: Download any uploaded file
+- **File List**: View all uploaded files in a table
 
 ### Security Features
-- **File Type Validation**: Only allows predefined file types (see allowed extensions list)
+- **File Type Validation**: Only allows safe file types
 - **Path Protection**: Prevents directory traversal attacks
 - **Secure Filenames**: Sanitizes file names to prevent issues
 - **File Size Limits**: Maximum 1GB per file (with smart warnings for larger files)
@@ -113,11 +144,9 @@ simple server(using python)/
 
 ### Allowed File Types
 - **Images**: png, jpg, jpeg, gif
-- **Videos**: mp4, avi, mov, mkv, webm, flv, wmv
+- **Videos**: mp4, avi, mov, mkv
 - **Documents**: txt, pdf, doc, docx
-- **Archives**: zip, rar, 7z, tar, gz
-- **Applications**: apk, exe, msi, dmg, iso, bin, app, deb, rpm
-- **Scripts**: bat, sh
+- **Archives**: zip, rar
 
 ---
 
@@ -170,6 +199,11 @@ When you select files larger than 1GB, the system will:
 - Make sure you have write permissions in the project folder
 - Try running as administrator (Windows) or with sudo (Mac/Linux)
 
+**"Uploads folder issues"**
+- The `uploads/` folder is automatically created when first needed
+- This folder is excluded from git (contains user data, not source code)
+- If you need to reset: stop the server, delete `uploads/` folder, restart
+
 ### Technical Issues:
 
 **Import errors:**
@@ -187,48 +221,70 @@ pip install Flask Werkzeug
 ## Security Notes
 
 ### What's Protected:
-✅ File type validation (allows safe file types - see allowed extensions list)  
+✅ File type validation (no executable files)  
 ✅ Path traversal protection (can't access system files)  
 ✅ Secure filename handling  
-✅ File size limits  
+✅ File size limits (1GB default)  
 ✅ Input sanitization  
+✅ Directory traversal prevention  
 
 ### What to Be Aware Of:
-⚠️ This is designed for **local network use**  
-⚠️ Don't expose to the internet without additional security  
-⚠️ Anyone on your network can access uploaded files  
-⚠️ Some executable file types are allowed - be cautious with files from untrusted sources  
+⚠️ **Local Network Only**: This is designed for local network use  
+⚠️ **No Authentication**: Anyone on your network can upload/download files  
+⚠️ **Internet Exposure**: Never expose directly to the internet without authentication  
+⚠️ **Disk Space**: Uploaded files are stored locally - monitor available space  
 
----
+### When You Need a SECRET_KEY:
+- **Internet Deployment**: If exposing beyond your local network
+- **Session Persistence**: If you want upload status messages to persist across server restarts
+- **Production Use**: For any production or shared environment
+- **Authentication**: If you plan to add user login features later  
 
-## API Endpoints
-
-For programmatic access, the server provides these endpoints:
-
-### Upload Endpoints
-- `POST /` - Main upload form (handles multiple files)
-- `POST /upload_folder` - Folder upload with structure preservation
-- `POST /uppy_upload` - Single file upload API (returns simple OK/error response)
-
-### File Access
-- `GET /uploads/<filename>` - Direct file access (for previews and downloads)
-- `GET /download/<filename>` - Force download with attachment headers
-
-### Usage Example:
-```bash
-# Upload a single file via API
-curl -X POST -F "file=@example.txt" http://localhost:5000/uppy_upload
-```
+### Security Recommendations:
+- **Always set a custom SECRET_KEY** using environment variables
+- **Never commit sensitive files** to version control (uploads/, .env files)
+- **Use HTTPS** for secure connections
+- **Implement authentication** for production environments
+- **Regular security updates** - keep Flask and dependencies updated
+- **Monitor uploads folder** for suspicious files
+- **Backup uploaded files** regularly
 
 ---
 
 ## Configuration
 
 ### Environment Variables:
+
+**For Local Network Use:**
 ```bash
-# Set a custom secret key (recommended for production)
-export SECRET_KEY="your-very-long-random-string-here"
+# No setup required! Just run:
+python app.py
 ```
+
+**For Consistent Sessions (Optional):**
+```bash
+# Option 1: Simple environment variable
+# Windows PowerShell:
+$env:SECRET_KEY="my-local-server-key"
+
+# Linux/Mac:
+export SECRET_KEY="my-local-server-key"
+```
+
+**For Production/Internet Use:**
+```bash
+# Option 1: Using .env file (Recommended)
+cp .env.example .env
+# Edit .env and set a strong SECRET_KEY
+
+# Option 2: Strong random key
+export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+```
+
+### Important Files (Git Management):
+- ✅ **Included in Git**: Source code, templates, static files, requirements.txt
+- ❌ **Excluded from Git**: uploads/, .env files, logs/, __pycache__/
+- 📁 **`.gitignore` file** automatically excludes sensitive files and folders
 
 ### Customization:
 - **Change upload folder**: Edit `UPLOAD_FOLDER` in `app.py`

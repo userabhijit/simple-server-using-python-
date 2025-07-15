@@ -12,13 +12,7 @@ UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Allowed file extensions for security
-ALLOWED_EXTENSIONS = {
-    'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif',
-    'mp4', 'avi', 'mov', 'mkv', 'webm', 'flv', 'wmv',
-    'doc', 'docx', 'zip', 'rar', '7z', 'tar', 'gz',
-    'apk', 'exe', 'msi', 'dmg', 'iso', 'bin', 'app', 'deb', 'rpm', 'bat', 'sh', 'cmd',
-    'msu', 'cab', 'ps1', 'scr', 'cpl', 'vbs', 'jar', 'com', 'msc', 'lnk'
-}
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'avi', 'mov', 'mkv', 'doc', 'docx', 'zip', 'rar'}
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -91,8 +85,7 @@ def index():
     previews = {f: get_file_preview(f) for f in files}
     local_ip = get_local_ip()
     server_url = f"http://{local_ip}:5000/"
-    allowed_exts = sorted(ALLOWED_EXTENSIONS)
-    return render_template('index.html', files=files, previews=previews, local_ip=local_ip, server_url=server_url, allowed_exts=allowed_exts)
+    return render_template('index.html', files=files, previews=previews, local_ip=local_ip, server_url=server_url)
 
 @app.route('/download/<filename>')
 def download_file(filename):

@@ -9,195 +9,10 @@
 <body>
     <div class="container">
         <h1>Upload a File</h1>
-        <div class="allowed-extensions" style="margin-bottom: 16px; padding: 10px; background: #f0f4f8; border-radius: 6px; color: #333; font-size: 1.08em;">
-            <strong>Allowed file extensions:</strong>
-            <span>
-                {% for ext in allowed_exts %}
-                    .{{ ext }}{% if not loop.last %}, {% endif %}
-                {% endfor %}
-            </span>
-        </div>
-        <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 16px; margin-bottom: 18px;">
-            <input type="file" id="fileInput" name="file" multiple style="display:none;">
-            <input type="file" id="folderInput" name="files" multiple webkitdirectory directory style="display:none;">
-            <button type="button" id="chooseBtn" style="background: #007bff; color: #fff;">Choose</button>
+        <form id="uploadForm" method="post" enctype="multipart/form-data" onsubmit="return false;" style="display: flex; align-items: center; gap: 16px; margin-bottom: 18px;">
+            <input type="file" id="fileInput" multiple webkitdirectory>
+            <button type="button" id="uploadFolderBtn" style="background: #28a745; color: #fff; display: none;">Upload Folder</button>
         </form>
-        <div id="modalOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center;">
-            <div style="background:#fff; padding:32px 28px; border-radius:10px; box-shadow:0 4px 32px rgba(0,0,0,0.18); min-width:260px; text-align:center;">
-                <h2 style="margin-bottom:18px; font-size:1.25em;">What would you like to upload?</h2>
-                <button id="modalFilesBtn" style="background:#007bff; color:#fff; margin:0 10px 0 0; padding:10px 22px; border:none; border-radius:6px; font-size:1em; cursor:pointer;">Files</button>
-                <button id="modalFolderBtn" style="background:#28a745; color:#fff; padding:10px 22px; border:none; border-radius:6px; font-size:1em; cursor:pointer;">Folder</button>
-            </div>
-        </div>
-        <script>
-            // Modal logic
-            const chooseBtn = document.getElementById('chooseBtn');
-            const modalOverlay = document.getElementById('modalOverlay');
-            const modalFilesBtn = document.getElementById('modalFilesBtn');
-            const modalFolderBtn = document.getElementById('modalFolderBtn');
-            const fileInput = document.getElementById('fileInput');
-            const folderInput = document.getElementById('folderInput');
-            // Show modal on choose
-            chooseBtn.onclick = function() {
-                modalOverlay.style.display = 'flex';
-            };
-            // Hide modal and trigger file input
-            modalFilesBtn.onclick = function() {
-                modalOverlay.style.display = 'none';
-                fileInput.click();
-            };
-            modalFolderBtn.onclick = function() {
-                modalOverlay.style.display = 'none';
-                folderInput.click();
-            };
-            // Hide modal if overlay is clicked (not modal box)
-            modalOverlay.onclick = function(e) {
-                if (e.target === modalOverlay) {
-                    modalOverlay.style.display = 'none';
-                }
-            };
-
-            // Preview and upload logic (works for both file and folder input)
-            const previewQueue = document.getElementById('previewQueue');
-            const currentUpload = document.getElementById('currentUpload');
-            let previewBars = [];
-            const filesLeft = document.getElementById('filesLeft');
-            const uploadTimer = document.getElementById('uploadTimer');
-
-            function estimateUploadTime(fileSize) {
-                const MB = 1024 * 1024;
-                const typicalSpeedMbps = 50; // Assume 50 Mbps typical connection
-                const speedBytesPerSec = (typicalSpeedMbps * 1000000) / 8;
-                const timeSeconds = fileSize / speedBytesPerSec;
-                if (timeSeconds < 60) {
-                    return `~${Math.round(timeSeconds)} seconds`;
-                } else if (timeSeconds < 3600) {
-                    return `~${Math.round(timeSeconds / 60)} minutes`;
-                } else {
-                    return `~${Math.round(timeSeconds / 3600)} hours`;
-                }
-            }
-
-            function handleFileInputChange(input) {
-                previewQueue.innerHTML = '';
-                previewBars = [];
-                filesLeft.style.display = 'none';
-                uploadTimer.style.display = 'none';
-                if (input.files.length > 0) {
-                    // Check for large files (over 1GB)
-                    const GB = 1024 * 1024 * 1024;
-                    const largeFiles = Array.from(input.files).filter(file => file.size > GB);
-                    if (largeFiles.length > 0) {
-                        const maxSize = Math.max(...largeFiles.map(f => f.size));
-                        const maxSizeGB = (maxSize / GB).toFixed(2);
-                        const warningMessage = `⚠️ WARNING: Large File Detected!\n\n📁 Largest file: ${maxSizeGB} GB\n⏰ Upload time: ${estimateUploadTime(maxSize)}\n💾 Memory usage: ~${maxSizeGB} GB RAM needed\n🌐 Network impact: May slow down other devices\n\n❌ Potential issues:\n• Browser may timeout on slow connections\n• Upload failure if network disconnects\n• High memory usage during upload\n• Longer recovery time if upload fails\n\n✅ Click OK to temporarily increase limit and proceed\n❌ Click Cancel to choose smaller files`;
-                        if (!confirm(warningMessage)) {
-                            input.value = '';
-                            return;
-                        }
-                        // Store the temporary limit increase for the backend
-                        sessionStorage.setItem('tempMaxSize', maxSize + (100 * 1024 * 1024)); // Add 100MB buffer
-                    }
-                    previewQueue.style.display = 'flex';
-                    filesLeft.style.display = 'block';
-                    filesLeft.textContent = input.files.length + ' / ' + input.files.length + ' file(s) left';
-                    uploadTimer.style.display = 'none';
-                    uploadTimer.textContent = '';
-                    Array.from(input.files).forEach((file, idx) => {
-                        const fileDiv = document.createElement('div');
-                        fileDiv.style.display = 'flex';
-                        fileDiv.style.alignItems = 'center';
-                        fileDiv.style.gap = '16px';
-                        fileDiv.style.position = 'relative';
-                        fileDiv.style.height = '54px';
-                        fileDiv.style.background = '#f8fafb';
-                        fileDiv.style.borderRadius = '8px';
-                        fileDiv.style.marginBottom = '8px';
-                        fileDiv.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)';
-                        fileDiv.style.padding = '8px 14px';
-                        const thumbWrap = document.createElement('div');
-                        thumbWrap.style.flex = 'none';
-                        thumbWrap.style.display = 'flex';
-                        thumbWrap.style.alignItems = 'center';
-                        thumbWrap.style.justifyContent = 'center';
-                        thumbWrap.style.width = '44px';
-                        thumbWrap.style.height = '38px';
-                        if (file.type.startsWith('image/')) {
-                            const img = document.createElement('img');
-                            img.style.width = '38px';
-                            img.style.height = '38px';
-                            img.style.objectFit = 'cover';
-                            img.style.borderRadius = '6px';
-                            img.style.boxShadow = '0 1px 4px rgba(0,0,0,0.10)';
-                            const objectURL = URL.createObjectURL(file);
-                            img.src = objectURL;
-                            img.onload = () => URL.revokeObjectURL(objectURL); // Clean up memory
-                            thumbWrap.appendChild(img);
-                        } else if (file.type.startsWith('video/')) {
-                            const video = document.createElement('video');
-                            video.style.width = '38px';
-                            video.style.height = '38px';
-                            video.style.objectFit = 'cover';
-                            video.style.borderRadius = '6px';
-                            video.style.boxShadow = '0 1px 4px rgba(0,0,0,0.10)';
-                            const objectURL = URL.createObjectURL(file);
-                            video.src = objectURL;
-                            video.muted = true;
-                            video.playsInline = true;
-                            video.preload = 'metadata';
-                            video.controls = false;
-                            video.autoplay = false;
-                            video.addEventListener('mouseenter', () => video.play());
-                            video.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
-                            video.addEventListener('loadeddata', () => URL.revokeObjectURL(objectURL)); // Clean up memory
-                            thumbWrap.appendChild(video);
-                        } else {
-                            const icon = document.createElement('span');
-                            icon.textContent = '📄';
-                            icon.style.fontSize = '1.7em';
-                            thumbWrap.appendChild(icon);
-                        }
-                        fileDiv.appendChild(thumbWrap);
-                        const infoWrap = document.createElement('div');
-                        infoWrap.style.display = 'flex';
-                        infoWrap.style.flexDirection = 'column';
-                        infoWrap.style.flex = '1';
-                        infoWrap.style.overflow = 'hidden';
-                        const nameSpan = document.createElement('span');
-                        nameSpan.textContent = file.webkitRelativePath || file.name;
-                        nameSpan.style.fontSize = '1.08em';
-                        nameSpan.style.color = '#333';
-                        nameSpan.style.whiteSpace = 'nowrap';
-                        nameSpan.style.overflow = 'hidden';
-                        nameSpan.style.textOverflow = 'ellipsis';
-                        nameSpan.style.display = 'block';
-                        infoWrap.appendChild(nameSpan);
-                        // Progress bar
-                        const barWrap = document.createElement('div');
-                        barWrap.style.width = '100%';
-                        barWrap.style.height = '8px';
-                        barWrap.style.background = '#e9ecef';
-                        barWrap.style.borderRadius = '4px';
-                        barWrap.style.overflow = 'hidden';
-                        barWrap.style.marginTop = '7px';
-                        const bar = document.createElement('div');
-                        bar.style.height = '100%';
-                        bar.style.width = '0%';
-                        bar.style.background = '#28a745';
-                        bar.style.transition = 'width 0.2s';
-                        barWrap.appendChild(bar);
-                        infoWrap.appendChild(barWrap);
-                        fileDiv.appendChild(infoWrap);
-                        previewQueue.appendChild(fileDiv);
-                        previewBars.push(bar);
-                    });
-                } else {
-                    previewQueue.style.display = 'none';
-                }
-            }
-            fileInput.addEventListener('change', function() { handleFileInputChange(fileInput); });
-            folderInput.addEventListener('change', function() { handleFileInputChange(folderInput); });
-        </script>
         <div class="server-ip" style="margin-bottom: 18px;">
           Server URL: <strong><a href="{{ server_url }}" target="_blank">{{ server_url }}</a></strong>
         </div>
@@ -225,6 +40,277 @@
             </script>
           {% endif %}
         {% endwith %}
+        <script>
+        const fileInput = document.getElementById('fileInput');
+        const previewQueue = document.getElementById('previewQueue');
+        const uploadFolderBtn = document.getElementById('uploadFolderBtn');
+        const currentUpload = document.getElementById('currentUpload');
+        let previewBars = [];
+        const filesLeft = document.getElementById('filesLeft');
+        const uploadTimer = document.getElementById('uploadTimer');
+        
+        function estimateUploadTime(fileSize) {
+            const MB = 1024 * 1024;
+            const typicalSpeedMbps = 50; // Assume 50 Mbps typical connection
+            const speedBytesPerSec = (typicalSpeedMbps * 1000000) / 8;
+            const timeSeconds = fileSize / speedBytesPerSec;
+            
+            if (timeSeconds < 60) {
+                return `~${Math.round(timeSeconds)} seconds`;
+            } else if (timeSeconds < 3600) {
+                return `~${Math.round(timeSeconds / 60)} minutes`;
+            } else {
+                return `~${Math.round(timeSeconds / 3600)} hours`;
+            }
+        }
+        
+        fileInput.addEventListener('change', function() {
+            previewQueue.innerHTML = '';
+            previewBars = [];
+            filesLeft.style.display = 'none';
+            uploadTimer.style.display = 'none';
+            
+            if (fileInput.files.length > 0) {
+                // Check for large files (over 1GB)
+                const GB = 1024 * 1024 * 1024;
+                const largeFiles = Array.from(fileInput.files).filter(file => file.size > GB);
+                
+                if (largeFiles.length > 0) {
+                    const maxSize = Math.max(...largeFiles.map(f => f.size));
+                    const maxSizeGB = (maxSize / GB).toFixed(2);
+                    
+                    const warningMessage = `⚠️ WARNING: Large File Detected!
+                    
+📁 Largest file: ${maxSizeGB} GB
+⏰ Upload time: ${estimateUploadTime(maxSize)}
+💾 Memory usage: ~${maxSizeGB} GB RAM needed
+🌐 Network impact: May slow down other devices
+
+❌ Potential issues:
+• Browser may timeout on slow connections
+• Upload failure if network disconnects
+• High memory usage during upload
+• Longer recovery time if upload fails
+
+✅ Click OK to temporarily increase limit and proceed
+❌ Click Cancel to choose smaller files`;
+
+                    if (!confirm(warningMessage)) {
+                        fileInput.value = '';
+                        return;
+                    }
+                    
+                    // Store the temporary limit increase for the backend
+                    sessionStorage.setItem('tempMaxSize', maxSize + (100 * 1024 * 1024)); // Add 100MB buffer
+                }
+                
+                previewQueue.style.display = 'flex';
+                uploadFolderBtn.style.display = 'inline-block';
+                filesLeft.style.display = 'block';
+                filesLeft.textContent = fileInput.files.length + ' / ' + fileInput.files.length + ' file(s) left';
+                uploadTimer.style.display = 'none';
+                uploadTimer.textContent = '';
+                
+                Array.from(fileInput.files).forEach((file, idx) => {
+                    const fileDiv = document.createElement('div');
+                    fileDiv.style.display = 'flex';
+                    fileDiv.style.alignItems = 'center';
+                    fileDiv.style.gap = '16px';
+                    fileDiv.style.position = 'relative';
+                    fileDiv.style.height = '54px';
+                    fileDiv.style.background = '#f8fafb';
+                    fileDiv.style.borderRadius = '8px';
+                    fileDiv.style.marginBottom = '8px';
+                    fileDiv.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)';
+                    fileDiv.style.padding = '8px 14px';
+
+                    const thumbWrap = document.createElement('div');
+                    thumbWrap.style.flex = 'none';
+                    thumbWrap.style.display = 'flex';
+                    thumbWrap.style.alignItems = 'center';
+                    thumbWrap.style.justifyContent = 'center';
+                    thumbWrap.style.width = '44px';
+                    thumbWrap.style.height = '38px';
+
+                    if (file.type.startsWith('image/')) {
+                        const img = document.createElement('img');
+                        img.style.width = '38px';
+                        img.style.height = '38px';
+                        img.style.objectFit = 'cover';
+                        img.style.borderRadius = '6px';
+                        img.style.boxShadow = '0 1px 4px rgba(0,0,0,0.10)';
+                        const objectURL = URL.createObjectURL(file);
+                        img.src = objectURL;
+                        img.onload = () => URL.revokeObjectURL(objectURL); // Clean up memory
+                        thumbWrap.appendChild(img);
+                    } else if (file.type.startsWith('video/')) {
+                        const video = document.createElement('video');
+                        video.style.width = '38px';
+                        video.style.height = '38px';
+                        video.style.objectFit = 'cover';
+                        video.style.borderRadius = '6px';
+                        video.style.boxShadow = '0 1px 4px rgba(0,0,0,0.10)';
+                        const objectURL = URL.createObjectURL(file);
+                        video.src = objectURL;
+                        video.muted = true;
+                        video.playsInline = true;
+                        video.preload = 'metadata';
+                        video.controls = false;
+                        video.autoplay = false;
+                        video.addEventListener('mouseenter', () => video.play());
+                        video.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+                        video.addEventListener('loadeddata', () => URL.revokeObjectURL(objectURL)); // Clean up memory
+                        thumbWrap.appendChild(video);
+                    } else {
+                        const icon = document.createElement('span');
+                        icon.textContent = '📄';
+                        icon.style.fontSize = '1.7em';
+                        thumbWrap.appendChild(icon);
+                    }
+                    fileDiv.appendChild(thumbWrap);
+
+                    const infoWrap = document.createElement('div');
+                    infoWrap.style.display = 'flex';
+                    infoWrap.style.flexDirection = 'column';
+                    infoWrap.style.flex = '1';
+                    infoWrap.style.overflow = 'hidden';
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = file.webkitRelativePath || file.name;
+                    nameSpan.style.fontSize = '1.08em';
+                    nameSpan.style.color = '#333';
+                    nameSpan.style.whiteSpace = 'nowrap';
+                    nameSpan.style.overflow = 'hidden';
+                    nameSpan.style.textOverflow = 'ellipsis';
+                    nameSpan.style.display = 'block';
+                    infoWrap.appendChild(nameSpan);
+
+                    // Progress bar
+                    const barWrap = document.createElement('div');
+                    barWrap.style.width = '100%';
+                    barWrap.style.height = '8px';
+                    barWrap.style.background = '#e9ecef';
+                    barWrap.style.borderRadius = '4px';
+                    barWrap.style.overflow = 'hidden';
+                    barWrap.style.marginTop = '7px';
+                    const bar = document.createElement('div');
+                    bar.style.height = '100%';
+                    bar.style.width = '0%';
+                    bar.style.background = '#28a745';
+                    bar.style.transition = 'width 0.2s';
+                    barWrap.appendChild(bar);
+                    infoWrap.appendChild(barWrap);
+
+                    fileDiv.appendChild(infoWrap);
+                    previewQueue.appendChild(fileDiv);
+                    previewBars.push(bar);
+                });
+            } else {
+                previewQueue.style.display = 'none';
+                uploadFolderBtn.style.display = 'none';
+            }
+        });
+        uploadFolderBtn.addEventListener('click', async function() {
+            if (fileInput.files.length === 0) return;
+            const files = Array.from(fileInput.files);
+            let filesRemaining = files.length;
+            filesLeft.style.display = 'block';
+            currentUpload.style.display = 'block';
+            let startTime = Date.now();
+            let filesDone = 0;
+            uploadTimer.style.display = 'inline-block';
+            function updateUploadTimer() {
+                if (filesDone === 0) {
+                    uploadTimer.textContent = '';
+                    return;
+                }
+                const elapsed = (Date.now() - startTime) / 1000;
+                const avgPerFile = elapsed / filesDone;
+                const filesLeftCount = files.length - filesDone;
+                const timeLeft = Math.round(avgPerFile * filesLeftCount);
+                const mins = Math.floor(timeLeft / 60);
+                const secs = timeLeft % 60;
+                uploadTimer.textContent = `Time left: ${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+            updateUploadTimer();
+            let uploadTimerInterval = setInterval(updateUploadTimer, 1000);
+
+            const MAX_PARALLEL = 3;
+            let nextIndex = 0;
+            let activeUploads = 0;
+
+            await new Promise((resolveAll) => {
+                function startNext() {
+                    if (nextIndex >= files.length) {
+                        if (activeUploads === 0) {
+                            // All done
+                            clearInterval(uploadTimerInterval);
+                            currentUpload.textContent = 'All files uploaded!';
+                            filesLeft.textContent = '0 / ' + files.length + ' file(s) left';
+                            uploadTimer.textContent = 'Done!';
+                            
+                            // Clear temporary size limit
+                            sessionStorage.removeItem('tempMaxSize');
+                            
+                            setTimeout(() => { window.location.reload(); }, 800);
+                            resolveAll();
+                        }
+                        return;
+                    }
+                    const fileIdx = nextIndex;
+                    const file = files[fileIdx];
+                    nextIndex++;
+                    activeUploads++;
+                    currentUpload.textContent = 'Uploading: ' + (file.webkitRelativePath || file.name);
+                    filesLeft.textContent = filesRemaining + ' / ' + files.length + ' file(s) left';
+                    filesRemaining--;
+                    const formData = new FormData();
+                    formData.append('files', file, file.webkitRelativePath || file.name);
+                    
+                    // Add temporary size limit if set
+                    const tempMaxSize = sessionStorage.getItem('tempMaxSize');
+                    if (tempMaxSize) {
+                        formData.append('tempMaxSize', tempMaxSize);
+                    }
+                    
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/upload_folder');
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable) {
+                            const percent = (e.loaded / e.total) * 100;
+                            previewBars[fileIdx].style.width = percent + '%';
+                        }
+                    };
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            previewBars[fileIdx].style.width = '100%';
+                            previewBars[fileIdx].style.background = '#28a745';
+                        } else {
+                            previewBars[fileIdx].style.background = '#dc3545';
+                            console.error('Upload failed for file:', file.name, 'Status:', xhr.status);
+                        }
+                        filesDone++;
+                        updateUploadTimer();
+                        activeUploads--;
+                        startNext();
+                    };
+                    xhr.onerror = function() {
+                        previewBars[fileIdx].style.background = '#dc3545';
+                        console.error('Upload error for file:', file.name);
+                        filesDone++;
+                        updateUploadTimer();
+                        activeUploads--;
+                        startNext();
+                    };
+                    xhr.send(formData);
+                }
+                // Start up to MAX_PARALLEL uploads
+                for (let i = 0; i < Math.min(MAX_PARALLEL, files.length); i++) {
+                    startNext();
+                }
+            });
+        });
+        </script>
     </div>
     <div class="container available-files" style="margin-top: 32px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">

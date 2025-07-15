@@ -16,38 +16,85 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Virtual Environment
-venv/
-env/
-ENV/
-.venv/
+# PyInstaller
+*.manifest
+*.spec
 
-# Environment variables
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables and secrets
 .env.local
+.env.development
+.env.test
 .env.production
-.env.staging
+config.ini
+secrets.json
+*.key
+*.pem
+*.crt
 
-# Flask
-instance/
-.webassets-cache
-
-# Uploads folder (user files)
-uploads/*
-!uploads/.gitkeep
-
-# IDE
+# IDE/Editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.DS_Store
+Thumbs.db
 
-# OS
+# Flask
+instance/
+.webassets-cache
+
+# Application specific
+uploads/
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Database files (if added later)
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+
+# OS generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -56,10 +103,5 @@ uploads/*
 ehthumbs.db
 Thumbs.db
 
-# Logs
-*.log
-logs/
-
-# Temporary files
-*.tmp
-*.temp
+# Windows
+*.stackdump
