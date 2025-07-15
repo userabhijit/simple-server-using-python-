@@ -96,14 +96,16 @@ simple server(using python)/
 - **Progress Tracking**: See upload progress for each file
 - **Smart Size Limits**: Automatically detects large files (>1GB) and warns user about potential issues
 - **Temporary Limit Increase**: Allows temporary size limit increases for large files with user consent
+- **API Upload**: Supports programmatic uploads via `/uppy_upload` endpoint
 
 ### File Management
-- **Preview**: See thumbnails for images and videos
-- **Download**: Download any uploaded file
-- **File List**: View all uploaded files in a table
+- **Preview**: See thumbnails for images and videos, text previews for text files
+- **Download**: Download any uploaded file with secure filename handling
+- **File List**: View all uploaded files sorted by modification time (newest first)
+- **File Information**: Displays file types and basic metadata
 
 ### Security Features
-- **File Type Validation**: Only allows safe file types
+- **File Type Validation**: Only allows predefined file types (see allowed extensions list)
 - **Path Protection**: Prevents directory traversal attacks
 - **Secure Filenames**: Sanitizes file names to prevent issues
 - **File Size Limits**: Maximum 1GB per file (with smart warnings for larger files)
@@ -111,9 +113,11 @@ simple server(using python)/
 
 ### Allowed File Types
 - **Images**: png, jpg, jpeg, gif
-- **Videos**: mp4, avi, mov, mkv
+- **Videos**: mp4, avi, mov, mkv, webm, flv, wmv
 - **Documents**: txt, pdf, doc, docx
-- **Archives**: zip, rar
+- **Archives**: zip, rar, 7z, tar, gz
+- **Applications**: apk, exe, msi, dmg, iso, bin, app, deb, rpm
+- **Scripts**: bat, sh
 
 ---
 
@@ -183,7 +187,7 @@ pip install Flask Werkzeug
 ## Security Notes
 
 ### What's Protected:
-✅ File type validation (no executable files)  
+✅ File type validation (allows safe file types - see allowed extensions list)  
 ✅ Path traversal protection (can't access system files)  
 ✅ Secure filename handling  
 ✅ File size limits  
@@ -193,6 +197,28 @@ pip install Flask Werkzeug
 ⚠️ This is designed for **local network use**  
 ⚠️ Don't expose to the internet without additional security  
 ⚠️ Anyone on your network can access uploaded files  
+⚠️ Some executable file types are allowed - be cautious with files from untrusted sources  
+
+---
+
+## API Endpoints
+
+For programmatic access, the server provides these endpoints:
+
+### Upload Endpoints
+- `POST /` - Main upload form (handles multiple files)
+- `POST /upload_folder` - Folder upload with structure preservation
+- `POST /uppy_upload` - Single file upload API (returns simple OK/error response)
+
+### File Access
+- `GET /uploads/<filename>` - Direct file access (for previews and downloads)
+- `GET /download/<filename>` - Force download with attachment headers
+
+### Usage Example:
+```bash
+# Upload a single file via API
+curl -X POST -F "file=@example.txt" http://localhost:5000/uppy_upload
+```
 
 ---
 
